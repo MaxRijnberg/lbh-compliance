@@ -65,6 +65,8 @@ class PortAbleAPIClient:
     def get_portcall(
         self, portcall_id: str
     ) -> Dict[str, Union[str, None, List, Dict, bool, int, float]]:
+        self.logger.info(f"Looking for {portcall_id} in PortAble")
+
         url = urljoin(self.base_url, "portcall/search")
         headers = {
             "accept": "application/json",
