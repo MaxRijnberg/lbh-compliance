@@ -1,7 +1,8 @@
 from lbh_compliance.config.settings import PASCAL_BASE_URL, API_TIMEOUT, PASCAL_HEADERS
 from lbh_compliance.utils.loggers import get_logger
+from lbh_compliance.utils.dtypes import PascalResponse
 
-from typing import Literal, Optional, Union, List, Dict
+from typing import Literal, Optional, Tuple, List
 from urllib.parse import urljoin
 import requests
 
@@ -19,7 +20,7 @@ class PascalAPIClient:
 
     def get_case_if_exists(
         self, name: str
-    ) -> Optional[Union[List[str], Dict[str, Union[str, None, int, Dict, List]]]]:
+    ) -> Tuple[Optional[PascalResponse], Optional[str]]:
         self.logger.info(f"Looking for case {name} in Pascal")
 
         url = urljoin(self.base_url, f"/api/v1/cases/searches")
@@ -40,21 +41,46 @@ class PascalAPIClient:
                 f"Error during get_case_if_exists (response.raise_for_status): {e}",
                 exc_info=True,
             )
-        if not response.json()["status"]:
-            self.logger.error(
-                f'Error during get_case_if_exists (response.json()["status"]): {response.json}',
-                exc_info=True,
-            )
-            raise requests.exceptions.ConnectionError(response=response)
 
         if response.json()["meta"]["total"] == 0:
             # No cases found for this name
-            return None
+
+            msg = f"No case in pascal for '{name}'"
+            self.logger.warning(msg)
+            return (None, msg)
 
         elif response.json()["meta"]["total"] > 1:
             # More cases found with this name, more clarity needed
-            pass
+            urls: List[str] = []
+
+            for case_num in range(response.json()["meta"]["total"]):
+                case_uuid = response.json()["data"][case_num]["uuid"]
+                urls.append(f"app.pascal.vartion.com/#/cases/{case_uuid}")
+
+            msg = f"Multiple cases found for {name}: {", ".join(urls)}"
+            self.logger.warning(msg)
+            return (None, msg)
 
         else:
             # One case found, return its object
-            return response.json()["data"][0]
+            return response.json()["data"][0], None
+
+    def get_sanctions(self, data: PascalResponse) -> Literal[0, 1, 2]:
+        """This function finds whether or not the party is sanctioned.
+        - 0 corresponds to "No sanctions in Pascal"
+        - 1 corresponds to "Unresolved sanctions in Pascal"
+        - 2 corresponds to "Sanctions found in Pascal"
+
+        Args:
+            data (PascalResponse): The JSON response of the Pascal API
+
+        Returns:
+            Literal[0, 1, 2]: {0: "No sanctions", 1: "Unresolved sanctions", 2: "Sanctions found"}
+        """
+        hits = data["hit_counts"]
+        if hits["positive"]["sanctions"] > 0:
+            return 2
+        elif hits["unresolved"]["sanctions"] > 0:
+            return 1
+        else:
+            return 0

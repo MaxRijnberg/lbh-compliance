@@ -24,3 +24,6 @@ PASCAL_HEADERS = {
 }
 
 LOG_DIR = BASE_DIR / "logs"
+
+# Front end colours
+SCREENING_COLOURS = {0: "#27F549", 1: "#F5B027", 2: "#9C2007"}
