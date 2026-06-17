@@ -92,6 +92,11 @@ class PortAbleAPIClient:
         self.logger.info("Successful login into PortAble")
 
     def find_parties_from_portcall(self, portcall_num: str) -> None:
+        # Clear this data when rerunning the API client
+        self.parties: Dict[str, Set[str]] = {}
+        self.other_parties: Set[str] = set()
+        self.attachments_dict: Dict[str, str] = {}
+
         pc_id = self.get_portcall_search_id(portcall_num)
 
         response = self.get_portcall_data(pc_id)
@@ -241,12 +246,16 @@ class PortAbleAPIClient:
 
         if other_parties_list := response["otherPartiesList"]:
             for party in other_parties_list:
-                if party["name"] not in self.parties.keys():
+                if (party["name"] not in self.parties.keys()) and (
+                    not party["name"].startswith("LBH ")
+                ):
                     self.other_parties.add(party["name"])
 
         if portable_parties_list := response["portablePartiesList"]:
             for party in portable_parties_list:
-                if party["name"] not in self.parties.keys():
+                if (party["name"] not in self.parties.keys()) and (
+                    not party["name"].startswith("LBH ")
+                ):
                     self.other_parties.add(party["name"])
 
         return bl
@@ -257,6 +266,7 @@ class PortAbleAPIClient:
         response = requests.get(url)
         if response.status_code != 200:
             msg = f"Failed to download BL: {response.status_code}"
+            self.logger.info(response.text)
             self.logger.error(msg)
             raise requests.exceptions.HTTPError(msg)
 
@@ -289,8 +299,6 @@ class PortAbleAPIClient:
                 )
                 # Check for the most recent BL
                 # Sometimes there are multiple BLs (when something updated/someone signed it)
-                print(item["createdAt"])
-                print(bl_date)
                 if dt.datetime.fromisoformat(item["createdAt"]) > bl_date:
                     bl_name = item["filename"]
                     bl_url = item["url"]

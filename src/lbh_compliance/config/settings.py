@@ -25,5 +25,8 @@ PASCAL_HEADERS = {
 
 LOG_DIR = BASE_DIR / "logs"
 
+# Front end mapping
+SCREENING_STATUSES = {0: "", 1: "- Unresolved sanction hits", 2: "- SANCTIONED ENTITY"}
+
 # Front end colours
-SCREENING_COLOURS = {0: "#27F549", 1: "#F5B027", 2: "#9C2007"}
+SCREENING_COLOURS = {0: "#09741B", 1: "#C08000", 2: "#9C2007"}

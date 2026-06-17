@@ -28,6 +28,7 @@ class PascalAPIClient:
         body = {
             "with": ["hitCountsPerSource"],
             "name": name,
+            "allow_duplicate_conversion": True,
         }
 
         response = self.session.post(
@@ -50,14 +51,35 @@ class PascalAPIClient:
             return (None, msg)
 
         elif response.json()["meta"]["total"] > 1:
-            # More cases found with this name, more clarity needed
+            filtered_cases: List[PascalResponse] = []
+
+            # Delete archived cases
+            for case_num in range(response.json()["meta"]["total"]):
+                case_status = response.json()["data"][case_num]["status"]
+                if case_status not in ["Archived", "On hold", "Preview"]:
+                    filtered_cases.append(response.json()["data"][case_num])
+
+            if len(filtered_cases) == 0:
+                # No valid cases found for this name
+
+                msg = f"This case for '{name}' is archived in Pascal"
+                self.logger.warning(msg)
+                return (None, msg)
+
+            elif len(filtered_cases) == 1:
+                # Only one case is leftover, we can simply use this
+                return filtered_cases[0], None
+
+            # More valid cases found with this name, more clarity needed
             urls: List[str] = []
 
-            for case_num in range(response.json()["meta"]["total"]):
-                case_uuid = response.json()["data"][case_num]["uuid"]
-                urls.append(f"app.pascal.vartion.com/#/cases/{case_uuid}")
+            for i, case in enumerate(filtered_cases):
+                case_uuid = case["uuid"]
+                urls.append(
+                    f'<a href="https://app.pascal.vartion.com/#/cases/{case_uuid}" target="_blank">CASE {i + 1}</a>'
+                )
 
-            msg = f"Multiple cases found for {name}: {", ".join(urls)}"
+            msg = f"Multiple cases found for '{name}': {", ".join(urls)}"
             self.logger.warning(msg)
             return (None, msg)
 
@@ -65,8 +87,8 @@ class PascalAPIClient:
             # One case found, return its object
             return response.json()["data"][0], None
 
-    def get_sanctions(self, data: PascalResponse) -> Literal[0, 1, 2]:
-        """This function finds whether or not the party is sanctioned.
+    def get_sanctions(self, data: PascalResponse) -> Tuple[Literal[0, 1, 2], str]:
+        """This function finds whether or not the party is sanctioned, and returns the URL.
         - 0 corresponds to "No sanctions in Pascal"
         - 1 corresponds to "Unresolved sanctions in Pascal"
         - 2 corresponds to "Sanctions found in Pascal"
@@ -75,12 +97,13 @@ class PascalAPIClient:
             data (PascalResponse): The JSON response of the Pascal API
 
         Returns:
-            Literal[0, 1, 2]: {0: "No sanctions", 1: "Unresolved sanctions", 2: "Sanctions found"}
+            Tuple[Literal[0, 1, 2], str]: {0: "No sanctions", 1: "Unresolved sanctions", 2: "Sanctions found"} and the URL.
         """
         hits = data["hit_counts"]
+        url = f'<a href="https://app.pascal.vartion.com/#/cases/{data["uuid"]}" target="_blank" align="right">View case in Pascal</a>'
         if hits["positive"]["sanctions"] > 0:
-            return 2
+            return 2, url
         elif hits["unresolved"]["sanctions"] > 0:
-            return 1
+            return 1, url
         else:
-            return 0
+            return 0, url
