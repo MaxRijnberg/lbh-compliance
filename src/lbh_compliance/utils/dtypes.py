@@ -889,7 +889,7 @@ PortAbleResponseVessel = TypedDict(
     "PortAbleResponseVessel",
     {
         "id": str,
-        "imo": str,
+        "imo": Required[str],
         "name": Required[str],
         "photo": str,
     },
@@ -1036,6 +1036,77 @@ PascalResponse = TypedDict(
         "updated_at": str,
         "user_id": int,
         "uuid": Required[str],
+    },
+    total=False,
+)
+
+
+DataItemsItemVesselsanctionsSanctionvesseldetailsItem = TypedDict(
+    "DataItemsItemVesselsanctionsSanctionvesseldetailsItem",
+    {
+        "formerVesselFlag": str,
+        "vesselCallsign": str,
+        "vesselFlag": str,
+        "vesselGross": str,
+        "vesselMmsi": str,
+        "vesselOwner": str,
+        "vesselTonnage": str,
+        "vesselType": str,
+    },
+    total=False,
+)
+
+DataItemsItemVesselsanctions = TypedDict(
+    "DataItemsItemVesselsanctions",
+    {
+        "aliases": str,
+        "endDate": str,
+        "endQualifier": str,
+        "firstPublished": str,
+        "lastPublished": str,
+        "name": str,
+        "program": str,
+        "sanctionId": str,
+        "sanctionVesselDetails": List[
+            DataItemsItemVesselsanctionsSanctionvesseldetailsItem
+        ],
+        "source": str,
+        "startDate": str,
+        "startQualifier": str,
+        "type": str,
+        "vesselId": int | float,
+        "vesselImo": int | float,
+        "vesselMmsi": str,
+        "vesselName": str,
+    },
+    total=False,
+)
+
+DataItemsItem = TypedDict(
+    "DataItemsItem",
+    {
+        "vesselSanctions": DataItemsItemVesselsanctions,
+    },
+    total=False,
+)
+
+LLIData = TypedDict(
+    "LLIData",
+    {
+        "currentPage": int | float,
+        "items": List[DataItemsItem],
+        "totalPages": int | float,
+        "totalRecords": int | float,
+    },
+    total=False,
+)
+
+SeaSearcherResponse = TypedDict(
+    "SeaSearcherResponse",
+    {
+        "Data": LLIData,
+        "Errors": str,
+        "IsSuccess": bool,
     },
     total=False,
 )

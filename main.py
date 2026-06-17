@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 from lbh_compliance.config.page_setup import setup_page
 from lbh_compliance.config.patterns import BL_PATTERN
@@ -7,6 +7,7 @@ from lbh_compliance.config.settings import SCREENING_COLOURS, SCREENING_STATUSES
 from lbh_compliance.api.portable import PortAbleAPIClient
 from lbh_compliance.api.pascal import PascalAPIClient
 from lbh_compliance.api.bl import BLReader
+from lbh_compliance.api.seasearcher import SeaSearcherAPIClient
 
 
 def get_paa_client() -> PortAbleAPIClient:
@@ -129,7 +130,7 @@ def main() -> None:
             st.rerun()
 
     # Full party list
-    final_parties = [
+    final_parties: List[str] = [
         p for p, selected in st.session_state.selected_parties.items() if selected
     ]
 
@@ -137,6 +138,7 @@ def main() -> None:
 
     if st.button("Run screening"):
         pas = PascalAPIClient()
+        sea = SeaSearcherAPIClient()
 
         for party in final_parties:
 
@@ -154,6 +156,18 @@ def main() -> None:
                     st.html(url)
             else:
                 st.html(f'<p style="border: 2px solid #FF0000;">{msg}</p>')
+
+        st.html("<h3>Vessel data screened with SeaSearcher</h3>")
+        if sea.is_sanctioned(paa.vessel_imo):
+            colour = SCREENING_COLOURS[2]
+            st.html(
+                f"<ul style=\"background-color:{colour};\">Vessel '{paa.vessel_name}' (IMO: {paa.vessel_imo}) is SANCTIONED</ul>"
+            )
+        else:
+            colour = SCREENING_COLOURS[0]
+            st.html(
+                f"<ul style=\"background-color:{colour};\">Vessel '{paa.vessel_name}' (IMO: {paa.vessel_imo}) is NOT sanctioned.</ul>"
+            )
 
 
 if __name__ == "__main__":

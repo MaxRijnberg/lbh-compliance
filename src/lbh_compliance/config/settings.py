@@ -23,6 +23,11 @@ PASCAL_HEADERS = {
     "Accept": "application/json",
 }
 
+# SeaSearcher settings
+SEASEARCHER_BASE_URL = "https://api.lloydslistintelligence.com/v1"
+SEASEARCHER_USERNAME = secrets["seasearcher_credentials"]["username"]
+SEASEARCHER_PASSWORD = secrets["seasearcher_credentials"]["password"]
+
 LOG_DIR = BASE_DIR / "logs"
 
 # Front end mapping

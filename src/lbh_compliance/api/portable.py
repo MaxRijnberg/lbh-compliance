@@ -45,6 +45,9 @@ class PortAbleAPIClient:
         self.other_parties: Set[str] = set()
         self.attachments_dict: Dict[str, str] = {}
 
+        self.vessel_name: str = ""
+        self.vessel_imo: str = ""
+
     def login(self) -> None:
         self.logger.info("Logging into PortAble")
 
@@ -100,7 +103,8 @@ class PortAbleAPIClient:
         pc_id = self.get_portcall_search_id(portcall_num)
 
         response = self.get_portcall_data(pc_id)
-        bl_bytes = self._filter_relevant_info_from_portcall(response)
+        self._store_filtered_data_in_instance(response)
+        bl_bytes = self._get_bl_from_portcall(response)
 
         if bl_bytes is not None:
             reader = BLReader(bl_bytes, self.logging_level)
@@ -213,11 +217,7 @@ class PortAbleAPIClient:
 
         return response.json()["data"]
 
-    def _filter_relevant_info_from_portcall(
-        self, response: PortAbleResponse
-    ) -> Optional[bytes]:
-        bl = self._get_bl(response["attachmentsList"])
-
+    def _store_filtered_data_in_instance(self, response: PortAbleResponse) -> None:
         principal_name = response["principal"]["name"]
         if principal_name and principal_name not in self.parties.keys():
             self.parties[principal_name] = {"Principal"}
@@ -231,12 +231,6 @@ class PortAbleAPIClient:
                 self.parties[husbandry_name] = {"Husbandry"}
             elif husbandry_name and husbandry_name in self.parties.keys():
                 self.parties[husbandry_name].add("Husbandry")
-
-        vessel_name = response["vessel"]["name"]
-        if vessel_name and vessel_name not in self.parties.keys():
-            self.parties[vessel_name] = {"Vessel"}
-        elif vessel_name and vessel_name in self.parties.keys():
-            self.parties[vessel_name].add("Vessel")
 
         da_owner_name = response["daOwner"]["name"]
         if da_owner_name and da_owner_name not in self.parties.keys():
@@ -258,6 +252,12 @@ class PortAbleAPIClient:
                 ):
                     self.other_parties.add(party["name"])
 
+        # We store vessel data seperately
+        self.vessel_name = response["vessel"]["name"]
+        self.vessel_imo = response["vessel"]["imo"]
+
+    def _get_bl_from_portcall(self, response: PortAbleResponse) -> Optional[bytes]:
+        bl = self._get_bl(response["attachmentsList"])
         return bl
 
     def _download_bl_file(self, url: str) -> bytes:
