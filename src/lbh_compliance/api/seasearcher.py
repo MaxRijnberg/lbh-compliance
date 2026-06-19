@@ -90,9 +90,6 @@ class SeaSearcherAPIClient:
             response.raise_for_status()
             data = response.json()
 
-            # According to the schema:
-            # isSuccess: boolean
-            # Data: { items: [...] }
             # If items is non-empty, the vessel is sanctioned.
 
             if data.get("IsSuccess"):
@@ -118,21 +115,3 @@ class SeaSearcherAPIClient:
                 )
         except requests.exceptions.RequestException as e:
             raise RuntimeError(f"Network error: {e}")
-
-
-# Example Usage:
-if __name__ == "__main__":
-    # Option 1: Pass credentials directly
-    # client = SeaSearcherAPIClient(username="test.user@abc.com", password="password123")
-
-    # Option 2: Use environment variables (Recommended)
-    # export LLI_USERNAME="test.user@abc.com"
-    # export LLI_PASSWORD="password123"
-    client = SeaSearcherAPIClient()
-
-    try:
-        imo_to_check = "9515802"
-        is_sanctioned = client.is_sanctioned(imo_to_check)
-        print(f"Vessel {imo_to_check} is sanctioned: {is_sanctioned}")
-    except Exception as e:
-        print(f"Error: {e}")

@@ -10,7 +10,7 @@ from lbh_compliance.utils.dtypes import (
     PortAbleResponseAttachmentslistItem,
 )
 from lbh_compliance.config.patterns import BL_PATTERN
-from lbh_compliance.api.bl import BLReader
+from lbh_compliance.tools.bl import BLReader
 
 from typing import Literal, TypedDict, Optional, List, Dict, Set
 from urllib.parse import urljoin

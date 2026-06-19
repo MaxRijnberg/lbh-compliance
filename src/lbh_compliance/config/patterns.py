@@ -35,3 +35,6 @@ BL_PATTERN = re.compile(
     """,
     re.IGNORECASE | re.VERBOSE,
 )
+
+PORTCALL_ID_PATTERN = re.compile(r"[A-Z]{2}\d{6}\b")
+SWIFT_PATTERN = re.compile(r"\b[A-Z]{2}\d{6}([A-Z0-9]{3})?\b")

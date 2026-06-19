@@ -6,7 +6,7 @@ from lbh_compliance.config.patterns import BL_PATTERN
 from lbh_compliance.config.settings import SCREENING_COLOURS, SCREENING_STATUSES
 from lbh_compliance.api.portable import PortAbleAPIClient
 from lbh_compliance.api.pascal import PascalAPIClient
-from lbh_compliance.api.bl import BLReader
+from lbh_compliance.tools.bl import BLReader
 from lbh_compliance.api.seasearcher import SeaSearcherAPIClient
 
 
