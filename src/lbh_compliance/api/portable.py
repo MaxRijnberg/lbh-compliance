@@ -49,6 +49,15 @@ class PortAbleAPIClient:
         self.vessel_imo: str = ""
 
     def login(self) -> None:
+        """
+        Log into PortAble Agent, this only needs to be done once per instance.
+        The session and authentication tokens are stored in the instance.
+
+        Raises:
+            requests.exceptions.ConnectionError: If there is any other status than 200.
+            requests.exceptions.RequestException: If the `status` key is False in the JSON response.
+            KeyError: If the `accessToken` key does not exist in the JSON response.
+        """
         self.logger.info("Logging into PortAble")
 
         url = urljoin(self.base_url, f"auth/login")
@@ -71,12 +80,13 @@ class PortAbleAPIClient:
                 f"Error during connect_to_PA (response.raise_for_status): {e}",
                 exc_info=True,
             )
+            raise requests.exceptions.ConnectionError(response=response)
         if not response.json()["status"]:
             self.logger.error(
                 f'Error during connect_to_PA (response.json()["status"]): {response.json}',
                 exc_info=True,
             )
-            raise requests.exceptions.ConnectionError(response=response)
+            raise requests.exceptions.RequestException(response=response)
 
         response_data = response.json()["data"]
         if "accessToken" not in response_data.keys():
@@ -95,6 +105,18 @@ class PortAbleAPIClient:
         self.logger.info("Successful login into PortAble")
 
     def find_parties_from_portcall(self, portcall_num: str) -> None:
+        """
+        Finds all the parties and attachments in a portcall and stores them in the following attributes:
+        - `parties`: Dict[str, Set[str]] - {"party_name": {"role_1", "role_2"}}
+        - `other_parties`: Set[str] - {"party_1", "party_2"}
+        - `attachments_dict`: Dict[str, str] - {"attachment_1.pdf": "https://download.example.com/attachment_1"}
+
+        Args:
+            portcall_num (str): The portcall ID to look for, examples: UY260022, NL240190, CN250453
+
+        Raises:
+            AttributeError: if there are no parties found for this portcall ID
+        """
         # Clear this data when rerunning the API client
         self.parties: Dict[str, Set[str]] = {}
         self.other_parties: Set[str] = set()
@@ -104,7 +126,7 @@ class PortAbleAPIClient:
 
         response = self.get_portcall_data(pc_id)
         self._store_filtered_data_in_instance(response)
-        bl_bytes = self._get_bl_from_portcall(response)
+        bl_bytes = self._get_bl(response["attachmentsList"])
 
         if bl_bytes is not None:
             reader = BLReader(bl_bytes, self.logging_level)
@@ -121,6 +143,22 @@ class PortAbleAPIClient:
             raise AttributeError(msg)
 
     def get_portcall_search_id(self, portcall_num: str) -> str:
+        """
+        Get the portcall ID based on the portcall number
+
+        Args:
+            portcall_num (str): The portcall number to look for, examples: UY260022, NL240190, CN250453
+
+        Raises:
+            requests.exceptions.ConnectionError: If there is any other status than 200.
+            requests.exceptions.RequestException: If the `status` key is False in the JSON response.
+            ValueError: If the portcall ID does not exist
+            LookupError: If the portcall ID returns multiple portcalls
+            KeyError: If the JSON response does not have an ID key
+
+        Returns:
+            str: The portcall ID, examples: t4tiLfK7CGt9e4raEzwA, xvIq4XmgW7QnRCpkSejR
+        """
         self.logger.info(f"Looking for {portcall_num} in PortAble")
 
         url = urljoin(self.base_url, "portcall/search")
@@ -153,26 +191,29 @@ class PortAbleAPIClient:
                 f"Error during get_portcall (response.raise_for_status): {e}",
                 exc_info=True,
             )
+            raise requests.exceptions.ConnectionError(response=response)
         if not response.json()["status"]:
             self.logger.error(
                 f'Error during get_portcall (response.json()["status"]): {response.json}',
                 exc_info=True,
             )
-            raise requests.exceptions.ConnectionError(response=response)
+            raise requests.exceptions.RequestException(response=response)
 
         if response.json()["data"]["total"] == 0:
+            msg = f"Query was successful, but portcall {portcall_num} does not exist."
             self.logger.error(
-                f"Query was successful, but portcall {portcall_num} does not exist.",
+                msg,
                 exc_info=True,
             )
-            raise requests.exceptions.ConnectionError(response=response)
+            raise ValueError(msg)
 
         if response.json()["data"]["total"] > 1:
+            msg = f"Query was successful, but portcall {portcall_num} is not unique."
             self.logger.error(
-                f"Query was successful, but portcall {portcall_num} is not unique.",
+                msg,
                 exc_info=True,
             )
-            raise requests.exceptions.ConnectionError(response=response)
+            raise LookupError(msg)
 
         pc = response.json()["data"]["entries"][0]
         if pc.get("id") is not None:
@@ -198,6 +239,18 @@ class PortAbleAPIClient:
         raise KeyError(msg)
 
     def get_portcall_data(self, portcall_id: str) -> PortAbleResponse:
+        """_summary_
+
+        Args:
+            portcall_id (str): The unique ID for the portcall (found in the URL), such as xvIq4XmgW7QnRCpkSejR
+
+        Raises:
+            requests.exceptions.ConnectionError: If there is any other status than 200.
+            requests.exceptions.RequestException: If the `status` key is False in the JSON response.
+
+        Returns:
+            PortAbleResponse: A Dict-like object containing the JSON response
+        """
         url = urljoin(self.base_url, f"portcall/{portcall_id}")
         response = self.session.get(url=url, timeout=API_TIMEOUT)
 
@@ -208,16 +261,27 @@ class PortAbleAPIClient:
                 f"Error during get_portcall (response.raise_for_status): {e}",
                 exc_info=True,
             )
+            raise requests.exceptions.ConnectionError(response=response)
         if not response.json()["status"]:
             self.logger.error(
                 f'Error during get_portcall (response.json()["status"]): {response.json()}',
                 exc_info=True,
             )
-            raise requests.exceptions.ConnectionError(response=response)
+            raise requests.exceptions.RequestException(response=response)
 
         return response.json()["data"]
 
     def _store_filtered_data_in_instance(self, response: PortAbleResponse) -> None:
+        """
+        Stores the necessary data from the JSON in the instance attributes.
+        - `parties`: Dict[str, Set[str]] - {"party_name": {"role_1", "role_2"}}
+        - `other_parties`: Set[str] - {"party_1", "party_2"}
+        - `attachments_dict`: Dict[str, str] - {"attachment_1.pdf": "https://download.example.com/attachment_1"}
+
+
+        Args:
+            response (PortAbleResponse): The Dict-like object containing the JSON response
+        """
         principal_name = response["principal"]["name"]
         if principal_name and principal_name not in self.parties.keys():
             self.parties[principal_name] = {"Principal"}
@@ -256,25 +320,42 @@ class PortAbleAPIClient:
         self.vessel_name = response["vessel"]["name"]
         self.vessel_imo = response["vessel"]["imo"]
 
-    def _get_bl_from_portcall(self, response: PortAbleResponse) -> Optional[bytes]:
-        bl = self._get_bl(response["attachmentsList"])
-        return bl
-
     def _download_bl_file(self, url: str) -> bytes:
+        """
+        This downloads a BL file from the Google Drive URL
+
+        Args:
+            url (str): The Google Drive URL with the download code
+
+        Raises:
+            requests.exceptions.ConnectionError: If the status code is not 200
+
+        Returns:
+            bytes: The file contents as bytes
+        """
         url = html.unescape(url)
 
         response = requests.get(url)
         if response.status_code != 200:
-            msg = f"Failed to download BL: {response.status_code}"
-            self.logger.info(response.text)
+            msg = f"Failed to download BL: {response.text}"
             self.logger.error(msg)
-            raise requests.exceptions.HTTPError(msg)
+            raise requests.exceptions.ConnectionError(msg)
 
         return response.content
 
     def _get_bl(
         self, attachments: List[PortAbleResponseAttachmentslistItem]
     ) -> Optional[bytes]:
+        """
+        Tries to look for the BL in the attachments list using a RegEx.
+        If multiple are found, the most recent one is taken as BL.
+
+        Args:
+            attachments (List[PortAbleResponseAttachmentslistItem]): A list of Dict-like objects containing the attachments data.
+
+        Returns:
+            Optional[bytes]: The content of the BL as bytes if found, else None.
+        """
         if len(attachments) == 0:
             msg = "No attachments found for this Portcall"
             self.logger.warning(msg)

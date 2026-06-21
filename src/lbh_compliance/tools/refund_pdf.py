@@ -39,11 +39,29 @@ class RefundReader:
         self.file_text: str = ""
 
     def get_data(self) -> RefundData:
+        """
+        Retrieve the data from the Refund Request form.
+
+        Returns:
+            RefundData: A Dict-like object with the relevant data of the refund request
+        """
         self.file_text = self._read_file(self.filename)
         data = self._parse_text(self.file_text)
         return data
 
     def _read_file(self, filename: Union[str, Path]) -> str:
+        """
+        Reads the Refund Request file.
+
+        Args:
+            filename (Union[str, Path]): The filename to read.
+
+        Raises:
+            ValueError: If the filetype is not .pdf or .docx
+
+        Returns:
+            str: The text of the file
+        """
         ext = str(filename).lower()
 
         if ext.endswith(".pdf"):
@@ -56,6 +74,15 @@ class RefundReader:
             raise ValueError(msg)
 
     def _parse_text(self, txt: str) -> RefundData:
+        """
+        Filters and extracts the text for relevant data in the screening process.
+
+        Args:
+            txt (str): The text to be checked.
+
+        Returns:
+            RefundData: A Dict-like object containing relevant information.
+        """
         txt = self._normalise(txt)
 
         beneficiary_name = self._extract_field(txt, "Beneficiary Account Name")
@@ -80,6 +107,15 @@ class RefundReader:
         }
 
     def _read_pdf(self, filename: Union[str, Path]) -> str:
+        """
+        Reads a PDF file and outputs its text in a str
+
+        Args:
+            filename (Union[str, Path]): The filename to read.
+
+        Returns:
+            str: The text found in the file
+        """
         reader = PdfReader(filename)
         text = []
         for page in reader.pages:
@@ -87,6 +123,15 @@ class RefundReader:
         return "\n".join(text)
 
     def _read_docx(self, filename: Union[str, Path]) -> str:
+        """
+        Reads a MS Word/.docx file and outputs its text in a str
+
+        Args:
+            filename (Union[str, Path]): The filename to read.
+
+        Returns:
+            str: The text found in the file
+        """
         doc = Document(str(filename))
         text_parts = []
         for p in doc.paragraphs:
@@ -104,17 +149,49 @@ class RefundReader:
         return "\n".join(text_parts)
 
     def _normalise(self, txt: str) -> str:
+        """
+        Normalises any text, by replacing:
+        - Any space -> " "
+        - "–" -> "-" (U+2013 -> U+002d)
+        - "|" -> " "
+
+        Args:
+            txt (str): The text to clean
+
+        Returns:
+            str: The clean text
+        """
         txt = re.sub(r"\s+", " ", txt)
         txt = txt.replace("–", "-")
         txt = txt.replace("|", " ")
         return txt
 
     def _extract_field(self, txt: str, field_name: str) -> str:
-        pattern = rf"{field_name}\s*(.*?)\s*(?:\d+\.|$)"
-        match = re.search(pattern, txt, re.IGNORECASE)
+        """
+        Extracts the text from a field if found in the table.
+
+        Args:
+            txt (str): The text to search in.
+            field_name (str): The field to search for.
+
+        Returns:
+            str: The value of that field, if found, else ""
+        """
+        pattern = re.compile(rf"{field_name}\s*(.*?)\s*(?:\d+\.|$)", re.IGNORECASE)
+        match = pattern.search(txt)
         return match.group(1).strip() if match else ""
 
     def _extract_swift_near(self, txt: str, label: str) -> str:
+        """
+        Searches for the field in the table, and ecxtracts the SWIFT code
+
+        Args:
+            txt (str): The raw text to search in
+            label (str): The value in the row to match
+
+        Returns:
+            str: The SWIFT code if found, else ""
+        """
         pattern = rf"{label}\s*(.*?)\s*(?:\d+\.|$)"
         match = re.search(pattern, txt, re.IGNORECASE)
 
@@ -127,6 +204,16 @@ class RefundReader:
         return swift_match.group(0) if swift_match else ""
 
     def _extract_intermediary_banks(self, txt: str) -> Optional[List[Tuple[str, str]]]:
+        """
+        Extracts the banks of the intermediary banks, if found.
+
+        Args:
+            txt (str): The text to search the intermediary banks in
+
+        Returns:
+            Optional[List[Tuple[str, str]]]: A list of Tuples containing (str, str),
+                in which the tuples correspond to (bank_name, swift_code)
+        """
         banks = []
 
         name_patterns = [

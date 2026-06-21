@@ -21,6 +21,21 @@ class PascalAPIClient:
     def get_case_if_exists(
         self, name: str
     ) -> Tuple[Optional[PascalResponse], Optional[str]]:
+        """Search for a case in Pascal by its name.
+        This name is case-insensitive.
+
+        Check Pascal's API reference for the exact response and further information.
+        https://app.pascal.vartion.com/docs#cases-POSTapi-v1-cases-searches
+
+        Args:
+            name (str): The name of the case you want to look for
+
+        Returns:
+            Tuple[Optional[PascalResponse], Optional[str]]: A tuple with both items being optional.
+            However, if the first item is not `None`, the second item WILL be `None`, and vice versa.
+            - The first item is the response JSON of the case (if found) as a Dict-like object,
+            - The second item is an message for the end user with further details if the case was not found.
+        """
         self.logger.info(f"Looking for case {name} in Pascal")
 
         url = urljoin(self.base_url, f"/api/v1/cases/searches")
@@ -28,7 +43,7 @@ class PascalAPIClient:
         body = {
             "with": ["hitCountsPerSource"],
             "name": name,
-            "allow_duplicate_conversion": True,
+            "allow_duplicate_conversion": True,  # This merges two cases with the same name if one is archived
         }
 
         response = self.session.post(
@@ -54,6 +69,9 @@ class PascalAPIClient:
             filtered_cases: List[PascalResponse] = []
 
             # Delete archived cases
+            # Although we tell Pascal to merge duplicate cases in our body
+            # It is unclear whether this is case sensitive
+            # We do it ourselves too, just in case
             for case_num in range(response.json()["meta"]["total"]):
                 case_status = response.json()["data"][case_num]["status"]
                 if case_status not in ["Archived", "On hold", "Preview"]:
@@ -76,7 +94,7 @@ class PascalAPIClient:
             for i, case in enumerate(filtered_cases):
                 case_uuid = case["uuid"]
                 urls.append(
-                    f'<a href="https://app.pascal.vartion.com/#/cases/{case_uuid}" target="_blank">CASE {i + 1}</a>'
+                    f'<a href="{self.base_url}/#/cases/{case_uuid}" target="_blank">CASE {i + 1}</a>'
                 )
 
             msg = f"Multiple cases found for '{name}': {", ".join(urls)}"
@@ -97,13 +115,46 @@ class PascalAPIClient:
             data (PascalResponse): The JSON response of the Pascal API
 
         Returns:
-            Tuple[Literal[0, 1, 2], str]: {0: "No sanctions", 1: "Unresolved sanctions", 2: "Sanctions found"} and the URL.
+            Tuple[Literal[0, 1, 2], str]: {0: "No sanctions", 1: "Unresolved sanctions", 2: "Sanctions found"} and the URL of that case.
         """
         hits = data["hit_counts"]
-        url = f'<a href="https://app.pascal.vartion.com/#/cases/{data["uuid"]}" target="_blank" align="right">View case in Pascal</a>'
+        url = f'<a href="{self.base_url}/#/cases/{data["uuid"]}" target="_blank" align="right">View case in Pascal</a>'
         if hits["positive"]["sanctions"] > 0:
             return 2, url
         elif hits["unresolved"]["sanctions"] > 0:
             return 1, url
         else:
             return 0, url
+
+    def get_bank_name(self, swift: str) -> Optional[str]:
+        self.logger.info(f"Looking for bank {swift} in Pascal")
+
+        url = urljoin(self.base_url, f"/api/v1/cases/searches")
+
+        body = {
+            "with": ["hitCountsPerSource"],
+            "per_page": 1,
+            "aliases": [swift],
+            "allow_duplicate_conversion": True,
+        }
+
+        response = self.session.post(
+            url=url, headers=self.headers, json=body, timeout=API_TIMEOUT
+        )
+
+        try:
+            response.raise_for_status()
+        except Exception as e:
+            self.logger.error(
+                f"Error during get_case_if_exists (response.raise_for_status): {e}",
+                exc_info=True,
+            )
+
+        if response.json()["meta"]["total"] == 0:
+            # No cases found for this name
+
+            msg = f"No bank in pascal with SWIFT '{swift}'"
+            self.logger.warning(msg)
+            return None
+
+        return response.json()["data"]["name"]
